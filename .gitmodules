@@ -1,0 +1,6 @@
+[submodule "svggl"]
+	path = svggl
+	url = http://github.com/cryeong/svggl.git
+[submodule "AETTools"]
+	path = AETTools
+	url = http://github.com/cryeong/AETTools.git

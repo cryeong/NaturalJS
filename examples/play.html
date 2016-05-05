@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript" src="../lib/saveNatural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+			canvas.width = 512;
+			canvas.height = 512;
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var img = new Image();
+				var g = new Graphic(_gl);
+				img.onload = function(e) {
+					
+
+					initPlay();
+				};
+				img.src = 'images/face2.png';
+
+				var count = 0;
+				var center = {x: 300, y: 300};
+				function initPlay() {
+					stats.begin();
+
+					g.clear();
+
+					// test draw
+					g.beginFill([1.0, 0.0, 0.0]);
+						g.moveTo(50, 50);
+						g.lineTo(50, 100);
+						g.lineTo(100, 100);
+						g.lineTo(100, 50);
+					g.end();
+//*
+					g.beginFill([0.0, 0.0, 1.0], 0.6);
+						g.drawRect(25, 25, 50, 50);
+					g.end();
+
+					g.beginFillImage(img);
+						g.drawRect(100, 100, 50, 50);
+					g.end();
+
+					g.beginFillImage(img);
+						g.drawCircle(250, 100, 50, 50);
+					g.end();
+
+					// ok, let's draw a Nazi logo, center at 300, 300
+					g.pushMatrix();
+
+					// if you want to rotate something, u need to know its center
+					g.rotateCenter(center.x, center.y, count);
+
+						// line width is not supported yet, see glLineWidth for Webgl
+						g.beginLine([1,0,0], 10);
+							g.moveTo(center.x - 50, center.y - 50);
+							g.lineTo(center.x - 50, center.y);
+							g.lineTo(center.x, center.y);
+							g.lineTo(center.x, center.y - 50);
+							g.lineTo(center.x + 50, center.y - 50);
+
+							// line use linestrip now so if the line break should be done in another draw (beginLine), otherwise an end() and a beginLine() will be called automatically using last parameters while a moveTo is used
+
+						// manually do these is much recommended
+						// g.end();
+						// g.beginLine([0,0,0], 10);
+
+							g.moveTo(center.x + 50, center.y + 50);
+							g.lineTo(center.x + 50, center.y);
+							g.lineTo(center.x, center.y);
+							g.lineTo(center.x, center.y + 50);
+							g.lineTo(center.x - 50, center.y + 50);
+						g.end();
+
+						// now the dot look like rectangle
+						g.beginPoint([1,0,0], 5);
+							// point and lineTo are same, moveTo just break the linkage, since point has no link, and the naming should make sense
+							g.point(center.x - 50, center.y - 50);
+							g.point(center.x - 50, center.y);
+							g.point(center.x, center.y);
+							g.point(center.x, center.y - 50);
+							g.point(center.x + 50, center.y - 50);
+							g.point(center.x + 50, center.y + 50);
+							g.point(center.x + 50, center.y);
+							g.point(center.x, center.y + 50);
+							g.point(center.x - 50, center.y + 50);
+
+						g.end();
+
+					g.popMatrix();
+
+					// faster draw, but beginFill + drawRect faster if draw multiple times
+					g.drawImage(img, 25, 25, 462, 462, 0.2);
+//*/
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+
+				window.addEventListener("mousemove", function(e) {
+					e.preventDefault();
+					if( !e ) { e = window.event; }
+					
+					center.x = e.pageX
+					center.y = e.pageY;
+				});
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+			canvas.width = 512;
+			canvas.height = 512;
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var img = new Image();
+
+				//var n3d = new Natural3D(_gl);
+				img.onload = function(e) {
+					
+
+					initPlay();
+				};
+				img.src = 'images/face2.png';
+
+				var count = 0;
+				var center = {x: 300, y: 300};
+				function initPlay() {
+					stats.begin();
+
+					
+
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+
+				window.addEventListener("mousemove", function(e) {
+					e.preventDefault();
+					if( !e ) { e = window.event; }
+					
+					center.x = e.pageX
+					center.y = e.pageY;
+				});
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

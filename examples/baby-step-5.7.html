@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+<!--
+/*
+*
+* Mirror mirror on the wall
+*
+******************************************/
+-->
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		var usePerspective = true;
+		var offsetz = -165;
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+
+			canvas.width = 512;
+			canvas.height = 512;
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var loads = [
+					['shadow', 'shadow512.png'],
+					['A', 'Ace-of-Heart-Big.png'],
+					['page', 'page-e1.png'],
+					['test', 'texture.png'],
+					['Box', 'Box.png']
+				];
+				var images = {};
+				function loadImages(func) {
+					if(loads.length > 0) {
+						var load = loads.shift();
+						var img = new Image();
+						img.onload = function(e) {
+							var imgtex = new ImageTexture(_gl);
+							images[load[0]] = imgtex;
+							imgtex.setValue(img);
+							loadImages(func);
+						};
+						img.src = "images/"+load[1];
+					} else {
+						func();
+					}
+				}
+				loadImages(function() {
+					initPlay();
+				});
+
+				// experimenting
+				var vplane = VFactory.genPlaneCenter(0,0,0,8,8);
+				var vcube = VFactory.genCubeCenter(0,0,0,3,3,3);
+				var vcubex = VFactory.genCubeCompleteCenter(0,0,0,3,3,3);
+				//var vpack = VFactory.genCube(0,0,0,3,3,3);
+
+				var _shader = new Shader(_gl, Utils.vfs.texture3d.v, Utils.vfs.texture3d.f);
+				
+				var _pshader = new Shader(_gl,  Utils.vfs.point3d.v,  Utils.vfs.point3d.f);
+var xc3d = {
+	v: "attribute vec3 aV3Position;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+uniform mat4 uM4ExtraTransform;\n\
+void main(void) {\n\
+gl_Position = uM4Projection * uM4CameraTransform * uM4ExtraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}",
+	f: "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+uniform vec4 uV4Color;\n\
+void main(void) {\n\
+gl_FragColor = uV4Color;\n\
+}"
+};
+				var _cshader = new Shader(_gl, xc3d.v, xc3d.f);
+var xt3d = {
+	v: "attribute vec3 aV3Position;\n\
+attribute vec2 aV2Texcoord;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+uniform mat4 uM4ExtraTransform;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+	vV2Texcoord = aV2Texcoord;\n\
+	gl_Position = uM4Projection * uM4CameraTransform * uM4ExtraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}",
+	f: "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+\n\
+uniform sampler2D uS2Texture;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+gl_FragColor = texture2D(uS2Texture, vV2Texcoord);\n\
+}"
+};
+
+var xm3d = {
+			v: "attribute vec3 aV3Position;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+uniform mat4 uM4ExtraTransform;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+	vec4 p = uM4Projection * uM4CameraTransform * uM4ExtraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+	gl_Position = p;\n\
+	// ignore extra transform, the texture coordinates should base on original position\n\
+	vec4 p2 = uM4Projection * uM4CameraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+	vec4 v = p2;\n\
+	v.x /= p2.w;\n\
+	v.y /= p2.w;\n\
+	float vx = (v.x + 1.0) / 2.0;\n\
+	float vy = (v.y + 1.0) / 2.0;\n\
+	vV2Texcoord = vec2(vx, vy);\n\
+}",
+			f: "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+\n\
+uniform sampler2D uS2Texture;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+gl_FragColor = texture2D(uS2Texture, vV2Texcoord);\n\
+}"
+};
+
+				var _xshader = new Shader(_gl, xt3d.v, xt3d.f);
+				var _mshader = new Shader(_gl, xm3d.v, xm3d.f);
+				var _camera = new Camera();
+
+
+				_camera.viewport(0,0,canvas.width, canvas.height);
+				_camera.perspective( 60/180*Math.PI, 1, 100000 );
+				_camera.lookAt([0,0,15, 1], [0,0,0,1]);
+				
+				new CameraControl(_camera, [0, 0, 15], [0, 0, 0]);
+
+				_gl.clearColor(0.9, 0.9, 0.9, 1.0);
+				//_gl.enable (_gl.BLEND);
+				//_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA);
+				_gl.enable(_gl.DEPTH_TEST);
+				//_gl.depthFunc(_gl.LESS);
+
+				//_gl.alphaFunc(_gl.GREATER, 0.99);
+				_gl.enable(_gl.CULL_FACE);
+				_gl.cullFace( _gl.BACK );
+
+				var _iRotation = mat4.create();
+
+				var _cubeRotation = mat4.create();
+				var _planeRotation = mat4.create();
+				mat4.translate(_planeRotation, _planeRotation, [0,0,-5])
+
+				var count = 0;
+
+				var _mirrorCamera = new Camera();
+				_mirrorCamera.viewport(0,0,canvas.width, canvas.height);
+				_mirrorCamera.perspective( 60/180*Math.PI, 1, 100000 );
+				_mirrorCamera.lookAt([0,0,-5, 1], [0,0,0,1]);
+
+				var _renderTextureA = new RenderTexture(_gl, canvas.width, canvas.height);
+				var _renderTextureB = new RenderTexture(_gl, canvas.width, canvas.height);
+
+				var useShader = _xshader;
+				var _renderTexture = _renderTextureA;
+				var _useTexture = _renderTextureB;
+				
+				console.log(useShader.explain());
+
+				function drawScene(_cam, _extra, _debug, _useOldTexture) {
+					if(_cam == null || _cam === undefined) _cam = _camera;
+					if(_extra == null || _extra === undefined) _extra = _iRotation;
+					if(_debug == null || _debug === undefined) _debug = true;
+					if(_useOldTexture == null || _useOldTexture === undefined) _useOldTexture = false;
+
+					_useTexture = (_useOldTexture) ? ((count % 2 == 0)? _renderTextureB: _renderTextureA): _renderTexture;
+
+					useShader.bind();
+
+						// share
+						useShader.updateUniform("uM4Projection", _cam.projection);
+						useShader.updateUniform("uM4CameraTransform", _cam.transform);
+
+						useShader.updateUniform("uM4ExtraTransform", _extra);
+
+						// cube
+						useShader.updateAttribute("aV3Position", vcubex.vertices);
+						useShader.updateAttribute("aV2Texcoord", vcubex.texcoords);
+						useShader.uploadAttributes();
+
+						useShader.updateUniform("uS2Texture", images['Box']);
+						useShader.updateUniform("uM4Transform", _cubeRotation);
+						useShader.drawElement(vcubex.indices, 'triangles');
+
+					useShader.unbind();
+
+					// debug
+					_mshader.bind();
+						// share
+						_mshader.updateUniform("uM4Projection", _cam.projection);
+						_mshader.updateUniform("uM4CameraTransform", _cam.transform);
+
+						_mshader.updateUniform("uM4ExtraTransform", _extra);
+						
+						// plane
+						_mshader.updateAttribute("aV3Position", vplane.vertices);
+						_mshader.uploadAttributes();
+
+						_mshader.updateUniform("uS2Texture", _useTexture);
+						_mshader.updateUniform("uM4Transform", _planeRotation);
+						_mshader.drawElement(vplane.indices, 'triangles');
+					_mshader.unbind();
+
+					// debug
+					if(_debug) {
+						_shader.bind();
+							// share
+							_cshader.updateUniform("uM4Projection", _cam.projection);
+							_cshader.updateUniform("uM4CameraTransform", _cam.transform);
+
+							_cshader.updateUniform("uM4ExtraTransform", _extra);
+							
+							// plane
+							_cshader.updateAttribute("aV3Position", vplane.vertices);
+							_cshader.uploadAttributes();
+
+							_cshader.updateUniform("uV4Color", [1.0,0.0,0.0,1.0]);
+
+							_cshader.updateUniform("uM4Transform", _planeRotation);
+							_cshader.drawElement(vplane.indices, 'lineloop');
+						_cshader.unbind();
+					}
+					
+				}
+
+				// clear all buffers
+				_renderTextureA.bind();
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+				_renderTextureA.unbind();
+				_renderTextureB.bind();
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+				_renderTextureB.unbind();
+
+
+				function initPlay() {
+					stats.begin();
+
+					_renderTexture = (count%2 == 0)? _renderTextureA: _renderTextureB;
+
+					mat4.rotate(_cubeRotation, _cubeRotation, 0.01 * 3, [1,0,0]);
+					mat4.rotate(_cubeRotation, _cubeRotation, 0.01 * 6, [0,1,0]);
+					mat4.rotate(_cubeRotation, _cubeRotation, 0.01, [0,0,1]);
+
+					_renderTexture.bind();
+						_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+						_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+
+						var ms = mat4.create();
+						//mat4.scale(ms, ms, [-1,1,1]);
+						mat4.translate(ms, ms, [0,0,-10]); // everything are z:-5 away from mirror
+						//mat4.rotate(ms, ms, Math.PI, [0,1,0]);
+						//mat4.rotate(ms, ms, count%360 * Math.PI / 180, [0,0,1]);
+
+						_gl.enable(_gl.CULL_FACE);
+						_gl.cullFace( _gl.BACK );
+						drawScene(_camera, ms, true, true);
+					_renderTexture.unbind();
+
+					_gl.enable(_gl.CULL_FACE);
+					_gl.cullFace( _gl.BACK );
+
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+
+
+					var ms2 = mat4.create();
+
+					//mat4.translate(ms2, ms2, [0,-10,0]);
+					//mat4.rotate(ms2, ms2, -Math.PI/2, [1,0,0]);
+
+					drawScene(_camera, ms2);
+
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

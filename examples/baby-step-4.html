@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript" src="../lib/saveNatural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		var usePerspective = true;
+		var offsetz = -165;
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+
+			canvas.width = 512;
+			canvas.height = 512;
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var loads = [
+					['shadow', 'shadow512.png'],
+					['A', 'Ace-of-Heart-Big.png'],
+					['page', 'page-e1.png'],
+					['test', 'texture.png']
+				];
+				var images = {};
+				function loadImages(func) {
+					if(loads.length > 0) {
+						var load = loads.shift();
+						var img = new Image();
+						img.onload = function(e) {
+							var imgtex = new ImageTexture(_gl);
+							images[load[0]] = imgtex;
+							imgtex.setValue(img);
+							loadImages(func);
+						};
+						img.src = "images/"+load[1];
+					} else {
+						func();
+					}
+				}
+				loadImages(function() {
+					initPlay();
+				});
+
+				// experimenting
+				//var vpack = VFactory.genPlaneCenter(0,0,0,3,3);
+				var vpack = VFactory.genCube(0,0,0,3,3,3);
+
+				var _shader = new Shader(_gl, Utils.ShaderScript.Texture2d.vertex, Utils.ShaderScript.Texture3d.fragment);
+				var _cshader = new Shader(_gl, Utils.ShaderScript.Color3d.vertex, Utils.ShaderScript.Color3d.fragment);
+				var _pshader = new Shader(_gl,  Utils.ShaderScript.Point3d.vertex,  Utils.ShaderScript.Point3d.fragment);
+				var _camera = new Camera();
+				_camera.viewport(0,0,canvas.width, canvas.height);
+				_camera.perspective( 60/180*Math.PI, 1, 100000 );
+				_camera.lookAt([0,0,15, 1], [0,0,0,1]);
+				
+				_gl.clearColor(0.9, 0.9, 0.9, 1.0);
+				_gl.enable (_gl.BLEND);
+				_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA);
+
+				var _rotation = mat4.create();
+
+				var count = 0;
+
+				var m4A = mat4.create();
+				var m4B = mat4.create();
+				var m4C = mat4.create();
+
+				var t = 0.0;
+				var s = 0.0;
+
+				s = Math.random() * 1.0 + 0.1;
+				//
+				mat4.translate(m4A,m4A,[-4,-4,0]);
+				mat4.rotate(m4A,m4A, Math.random() * Math.PI * 2,[1,0,0]);
+				mat4.rotate(m4A,m4A, Math.random() * Math.PI * 2,[0,1,0]);
+				mat4.rotate(m4A,m4A, Math.random() * Math.PI * 2,[0,0,1]);
+				mat4.scale(m4A, m4A, [s, s, s]);
+				
+				s = Math.random() * 1.0 + 0.1;
+				//
+				mat4.translate(m4B,m4B,[ 4,4,0]);
+				mat4.rotate(m4B,m4B,Math.random() * Math.PI * 2,[1,0,0]);
+				mat4.rotate(m4B,m4B,Math.random() * Math.PI * 2,[0,1,0]);
+				mat4.rotate(m4B,m4B,Math.random() * Math.PI * 2,[0,0,1]);
+				mat4.scale(m4B, m4B, [s, s, s]);
+
+				var useShader = _cshader;
+				
+
+				function initPlay() {
+					stats.begin();
+
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+
+					
+
+					useShader.bind();
+
+						// share
+						useShader.updateUniform("uM4Projection", _camera.projection);
+						useShader.updateUniform("uM4CameraTransform", _camera.transform);
+
+						useShader.updateAttribute("aV3Position", vpack.vertices);
+						useShader.uploadAttributes();
+
+						
+
+						// m4A
+						useShader.updateUniform("uV4Color", [1,0,0,1]);
+						useShader.updateUniform("uM4Transform", m4A);
+						useShader.drawElement(vpack.indices, 'lineloop');
+
+						// m4B
+						useShader.updateUniform("uV4Color", [0,0,1,1]);
+						useShader.updateUniform("uM4Transform", m4B);
+						useShader.drawElement(vpack.indices, 'lineloop');
+
+						// interpolation
+						t = Math.sin( count/50 )/2+0.5;
+
+						// m4C
+						//*
+						m4C = Utils.mat4interpolation(m4A, m4B, t);
+						useShader.updateUniform("uV4Color", [0,0,0,1]);
+						useShader.updateUniform("uM4Transform", m4C);
+						useShader.drawElement(vpack.indices, 'lineloop');
+						//*/
+
+					useShader.unbind();
+
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

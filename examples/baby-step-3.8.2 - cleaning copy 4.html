@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript" src="../lib/saveNatural.js"></script>
+		<script type="text/javascript" src="./js/book.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+		var _expr_0 = document.createElement('div');
+		_expr_0.style.cssText = "display: block; width: 10px; height: 10px; position: absolute; top: 0px; left: 0px; background: #00ff00;";
+		var _expr_1 = document.createElement('div');
+		_expr_1.style.cssText = "display: block; width: 10px; height: 10px; position: absolute; top: 0px; left: 0px; background: #ff0000;";
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		var usePerspective = true;
+		var offsetz = 57;
+		var g = null;
+		var sample = 0;
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+			// for perspective, if canvas size change, offsetz need to be adjusted
+			// current known offsetz
+			// 512x512, 57
+			// 512x768, -165
+			// 800x1200, -540
+			sample = 0;
+			canvas.width  = window.innerWidth;
+			canvas.height = window.innerHeight;
+
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+
+		        g = new Graphic(_gl);
+		        g.clearColor(0.9,0.9,0.9,1.0);
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var loads = [
+					['shadow', 'shadow512.png'],
+					['A', 'Ace-of-Heart-Big.png'],
+					['page', 'page-e1.png'],
+					['test', 'texture.png'],
+					['Lorum', 'Lorem-ipsum.png'],
+					['wide', 'widepage.png'],
+					['w','page768x512.png'],
+					['h','page512x768.png']
+				];
+				var images = {};
+				function loadImages(func) {
+					if(loads.length > 0) {
+						var load = loads.shift();
+						var img = new Image();
+						img.onload = function(e) {
+							var imgtex = new ImageTexture(_gl);
+							images[load[0]] = imgtex;
+							imgtex.setValue(img);
+							loadImages(func);
+						};
+						img.src = "images/"+load[1];
+					} else {
+						func();
+					}
+				}
+				loadImages(function() {
+					init3D();
+					initPlay();
+				});
+
+				function init3D() {
+
+				}
+
+
+
+				// init camera
+				var _camera = new Camera();
+				_camera.viewport(0,0,canvas.width, canvas.height);
+				if(usePerspective) {
+					_camera.perspective( 60/180*Math.PI, 1, 100000 );
+					_camera.lookAt([0,0,500, 1], [0,0,0,1]);
+				} else	
+					_camera.orthogonal(-canvas.width/2, canvas.width/2, -canvas.height/2, canvas.height/2, -1000, 1000);
+
+				var page = new Page({
+					convert2to3: function(x,y,z) {
+						return Utils.convert2to3(x,y,z,_camera);
+					},
+					imageHeight: 768,
+					imageWidth: 512,
+					usePerspective: usePerspective
+				});
+
+				function mouseStart(x,y) {
+					page.start(x,y);
+				}
+				function mouseMove(x,y) {
+					page.move(x,y);
+				}
+				function mouseEnd(x,y) {
+					page.end(x,y);
+				}
+				var evtTarget = canvas;
+				if('ontouchstart' in window) {
+					evtTarget.addEventListener( 'touchstart', function(e) {
+						e.preventDefault();
+						mouseStart(e.touches[0].pageX, e.touches[0].pageY);
+					});
+					evtTarget.addEventListener( "touchmove", function(e) {
+						e.preventDefault();
+						mouseMove(e.touches[0].pageX, e.touches[0].pageY);
+					});
+					evtTarget.addEventListener( "touchend", function(e) {
+						e.preventDefault();
+						mouseEnd(0,0);
+					});
+				} else {
+					evtTarget.addEventListener( 'mousedown', function(e) {
+						e.preventDefault();
+						mouseStart(e.pageX, e.pageY);
+					});
+					evtTarget.addEventListener( "mousemove", function(e) {
+						e.preventDefault();
+						mouseMove(e.pageX, e.pageY);
+					});
+					evtTarget.addEventListener( "mouseup", function(e) {
+						e.preventDefault();
+						mouseEnd(e.pageX, e.pageY);
+					});
+				}
+
+				var PI = Math.PI; // 3.141592653589793
+				var D2R = PI / 180.0;
+				var RADIUS_RANGE = 100.1;
+				var FAR = 2000.0;
+				var NEAR = 1.0;
+				var FOV = 45.0 * D2R;
+
+				// experimenting
+				var cube_vertices = [-1.0,-1.0,1.0,1.0,-1.0,1.0,1.0,1.0,1.0,-1.0,1.0,1.0,-1.0,-1.0,-1.0,-1.0,1.0,-1.0,1.0,1.0,-1.0,1.0,-1.0,-1.0,-1.0,1.0,-1.0,-1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,-1.0,-1.0,-1.0,-1.0,1.0, -1.0,-1.0,1.0,-1.0,1.0,-1.0,-1.0,1.0,1.0,-1.0,-1.0,1.0,1.0,-1.0,1.0,1.0,1.0,1.0,-1.0,1.0,-1.0,-1.0,-1.0,-1.0,-1.0,1.0,-1.0,1.0,1.0,-1.0,1.0,-1.0,];
+				var cube_indices = [0,1,2,0,2,3,4,5,6,4,6,7,8,9,10,8,10,11,12,13,14,12,14,15,16,17,18,16,18,19,20,21,22,20,22,23];
+
+				var img = new Image();
+var point_vs = "attribute vec2 aV2Position;\n\
+uniform float uF1PointSize;\n\
+uniform mat4 uM4Projection;\n\
+void main(void) {\n\
+gl_PointSize = uF1PointSize;\n\
+gl_Position = uM4Projection * vec4(aV2Position, 1.0, 1.0);\n\
+}";
+var point_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+uniform vec4 uV4Color;\n\
+void main(void) {\n\
+gl_FragColor = uV4Color;\n\
+}";
+var colorfill_vs = "attribute vec3 aV3Position;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+void main(void) {\n\
+gl_Position = uM4Projection * uM4CameraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}";
+var colorfill_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+uniform vec4 uV4Color;\n\
+void main(void) {\n\
+gl_FragColor = uV4Color;\n\
+}";
+var texturefill_vs = "attribute vec3 aV3Position;\n\
+attribute vec2 aV2Texcoord;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+	vV2Texcoord = aV2Texcoord;\n\
+	gl_Position = uM4Projection * uM4CameraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}";
+
+var texturefill_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+\n\
+uniform vec2 uV2Scale;\n\
+uniform float uF1UVOffset;\n\
+uniform sampler2D uS2Texture;\n\
+uniform mat2 uM2TextureTransform;\n\
+uniform float uF1Radius;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+// for simple shadow\n\
+// > http://stackoverflow.com/questions/5254838/calculating-distance-between-a-point-and-a-rectangular-box-nearest-point\n\
+float distance(vec2 p) {\n\
+	float dx = max(max(-p.x, p.x-1.0), 0.0);\n\
+	float dy = max(max(-p.y, p.y-1.0), 0.0);\n\
+	return sqrt(dx*dx + dy*dy);\n\
+}\n\
+void main(void) {\n\
+	vec2 uv = vV2Texcoord * uM2TextureTransform * uV2Scale;\n\
+	uv += vec2(uF1UVOffset, 0.0 + 0.5);\n\
+	if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {\n\
+		float shadow = uF1Radius / 100.0 + 0.15 - pow(distance(uv),0.3);\n\
+		gl_FragColor = vec4(shadow * 0.7);\n\
+	} else {\n\
+		gl_FragColor = texture2D(uS2Texture, uv);\n\
+	}\n\
+}";
+
+				var _shader = new Shader(_gl, texturefill_vs, texturefill_fs);
+				var _cshader = new Shader(_gl, colorfill_vs, colorfill_fs);
+				var _pshader = new Shader(_gl, point_vs, point_fs);
+				
+				
+				// the canvas' width is changed, thus perspective matrix will be different
+				// however we want to maintain the interaction using the perspective of a smaller size canvas
+				// hence a "fake" camera is prepared
+				var _camera2 = new Camera();
+				_camera2.viewport(0,0,512, 768);//canvas.height);
+				_camera2.perspective( 60/180*Math.PI, 1, 100000 );
+				_camera2.lookAt([0,0,500, 1], [0,0,0,1]);
+
+				var _rotation = mat4.create();
+				var _texrot = mat2.create();
+				_gl.clearColor(0.9, 0.9, 0.9, 1.0);
+				//_gl.enable (_gl.BLEND);
+				//_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA);
+				_gl.enable (_gl.BLEND);
+				_gl.blendEquationSeparate( _gl.FUNC_ADD, _gl.FUNC_ADD );
+				_gl.blendFuncSeparate( _gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA, _gl.ONE, _gl.ONE_MINUS_SRC_ALPHA );
+				//_gl.enable(_gl.CULL_FACE);
+				//_gl.alphaFunc(_gl.GREATER, 0.5);
+				//_gl.enable(_gl.ALPHA_TEST);
+				_gl.enable(_gl.DEPTH_TEST);
+				_gl.depthFunc(_gl.LESS);
+
+				var count = 0;
+
+				function drawTest() {
+					_cshader.bind();
+
+
+
+						// share
+						_cshader.updateUniform("uM4Projection", _camera.projection);
+						_cshader.updateUniform("uM4CameraTransform", _camera.transform);
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+						
+						_cshader.updateUniform("uV4Color", [1.0, 0.0, 0.0, 1.0]);
+
+						//_cshader.updateAttribute("aV3Position", vertices, 5, 0);
+
+						//_cshader.uploadAttributes();
+
+						//_cshader.drawArray(vertices.length / 5, 'linestrip');
+						//_cshader.drawElement(indices, "linestrip");
+
+						_cshader.updateAttribute("aV3Position", cube_vertices);
+						_cshader.uploadAttributes();
+
+						
+						mat4.identity(_rotation);
+
+						//mat4.translate(_rotation, _rotation, [0,0,Math.sin(count/90)*400-200]);
+						mat4.translate(_rotation, _rotation, [0,0,150]);
+						
+
+						//mat4.translate(_rotation, _rotation, [p[0], p[1], p[2]]);
+						mat4.scale(_rotation, _rotation, [20,20,20]);
+
+						mat4.rotate(_rotation, _rotation, count/180, [1,0,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,1,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,0,1]);
+
+						//var _draw_type = 'trianglestrip';
+						var _draw_type = 'lineloop';
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [2.5,0,0]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [-5,0,0]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [2.5,2.5,0]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [0,-5,0]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [0,2.5,2.5]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+						mat4.translate(_rotation, _rotation, [0,0,-5]);
+						_cshader.updateUniform("uM4Transform", _rotation);
+						_cshader.drawElement(cube_indices, _draw_type);
+
+					_cshader.unbind();
+				}
+				
+				function initPlay() {
+					if(stats) stats.begin();
+/*
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+//*/
+					g.clear();
+
+					drawTest();
+					
+					mat4.identity(_rotation);
+					mat4.rotate(_rotation, _rotation, page.curl().angle+Math.PI, [0,0,1]);
+
+					mat4.translate(_rotation, _rotation, [0,0, page.offsetZ]);
+
+					mat2.identity(_texrot);
+					mat2.rotate(_texrot, _texrot, page.curl().angle+Math.PI, [0,0,1]);
+
+					_shader.bind();
+
+						// share
+						_shader.updateUniform("uM4Projection", _camera.projection);
+						_shader.updateUniform("uM4CameraTransform", _camera.transform);
+						//_shader.updateUniform("uF1WidthScale", WS/(window.innerWidth/2));
+						_shader.updateUniform("uV2Scale", [page.widthScale, page.heightScale]);
+						_shader.updateUniform("uF1Radius", page.curl().radius);
+						_shader.updateUniform("uF1UVOffset", page.totalUVOffset);
+						_shader.updateUniform("uM4Transform", _rotation);
+						_shader.updateUniform("uS2Texture", images['h']);
+						_shader.updateUniform("uM2TextureTransform", _texrot);
+
+						_shader.updateAttribute("aV3Position", page.vertices, 5, 0);
+						_shader.updateAttribute("aV2Texcoord", page.vertices, 5, 3);
+
+						_shader.uploadAttributes();
+
+						
+						_gl.cullFace( _gl.BACK );
+						_shader.drawElement(page.indices, 'triangles');
+
+						_gl.cullFace( _gl.FRONT );
+						_shader.drawElement(page.indices, 'triangles');
+
+					_shader.unbind();
+
+					
+
+if( true ) { // debug
+					_cshader.bind();
+
+						// share
+						_cshader.updateUniform("uM4Projection", _camera.projection);
+						_cshader.updateUniform("uM4CameraTransform", _camera.transform);
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+						
+						_cshader.updateUniform("uV4Color", [1.0, 0.0, 0.0, 1.0]);
+
+						_cshader.updateAttribute("aV3Position", vertices, 5, 0);
+
+						_cshader.uploadAttributes();
+
+						//_cshader.drawArray(vertices.length / 5, 'linestrip');
+						_cshader.drawElement(indices, "linestrip");
+/*
+						_cshader.updateAttribute("aV3Position", cube_vertices);
+						_cshader.uploadAttributes();
+
+						
+
+						mat4.identity(_rotation);
+
+						mat4.translate(_rotation, _rotation, [p[0], p[1], p[2]]);
+						mat4.scale(_rotation, _rotation, [30,30,30]);
+
+						mat4.rotate(_rotation, _rotation, count/180, [1,0,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,1,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,0,1]);
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+
+						//_gl.cullFace( _gl.FRONT );
+						//_cshader.drawElement(cube_indices, "triangles");
+
+						_gl.cullFace( _gl.BACK );
+						_cshader.drawElement(cube_indices, "triangles");
+//*/
+					_cshader.unbind();
+					
+					g.beginLine([1,0,0], 1);
+						g.moveTo(page.center.x, 0.0);
+						g.lineTo(page.center.x, canvas.height);
+						g.moveTo(0.0, page.center.y);
+						g.lineTo(canvas.width, page.center.y);
+					g.end();
+}
+
+					if(stats) stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+
+				window.addEventListener('keydown', function(e) {
+					event = event || window.event;
+				    var keycode = event.charCode || event.keyCode;
+
+				    if(keycode === 80){
+				    	// press p to switch between orthogonal and perspective projection
+				        usePerspective = !usePerspective;
+
+				        if(usePerspective) {
+							_camera.perspective( 60/180*Math.PI, 1, 100000 );
+							_camera.lookAt([0,0,500, 1], [0,0,0,1]);
+							WS = texture_size * expectedH / canvas.height;
+							HS = texture_size * expectedH / canvas.height;
+
+							gtl = {x: -HW+HW+HW/2, y: -HH};
+							gtr = {x:  HW+HW+HW/2, y: -HH};
+							gbl = {x: -HW+HW+HW/2, y:  HH};
+							gbr = {x:  HW+HW+HW/2, y:  HH};
+						} else	{
+							_camera.orthogonal(-canvas.width/2, canvas.width/2, -canvas.height/2, canvas.height/2, -1000, 1000);
+							WS = texture_size * W / expectedW;
+							HS = texture_size * H / expectedH;
+
+							gtl = {x: -HW+W, y: -HH};
+							gtr = {x:  HW+W, y: -HH};
+							gbl = {x: -HW+W, y:  HH};
+							gbr = {x:  HW+W, y:  HH};
+						}
+				    }
+				});
+
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

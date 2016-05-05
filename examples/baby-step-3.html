@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+		var _expr_0 = document.createElement('div');
+		_expr_0.style.cssText = "display: block; width: 10px; height: 10px; position: absolute; top: 0px; left: 0px; background: #00ff00;";
+		var _expr_1 = document.createElement('div');
+		_expr_1.style.cssText = "display: block; width: 10px; height: 10px; position: absolute; top: 0px; left: 0px; background: #ff0000;";
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		var usePerspective = true;
+		var offsetz = -165;
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+			// for perspective, if canvas size change, offsetz need to be adjusted
+			// current known offsetz
+			// 512x512, 57
+			// 512x768, -165
+			// 800x1200, -540
+			canvas.width = 512;
+			canvas.height = 768;
+			document.body.appendChild(canvas);
+
+//			document.body.appendChild(_expr_0);
+//			document.body.appendChild(_expr_1);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var loads = [
+					['shadow', 'shadow512.png'],
+					['A', 'Ace-of-Heart-Big.png'],
+					['page', 'page-e1.png'],
+					['test', 'texture.png']
+				];
+				var images = {};
+				function loadImages(func) {
+					if(loads.length > 0) {
+						var load = loads.shift();
+						var img = new Image();
+						img.onload = function(e) {
+							var imgtex = new ImageTexture(_gl);
+							images[load[0]] = imgtex;
+							imgtex.setValue(img);
+							loadImages(func);
+						};
+						img.src = "images/"+load[1];
+					} else {
+						func();
+					}
+				}
+				loadImages(function() {
+					init3D();
+					initPlay();
+				});
+
+				function init3D() {
+
+				}
+
+				
+
+				var ids = [];
+				var vts = [];
+				var tcs = [];
+
+				var RH = 2000;
+				var hypotenuse = Math.sqrt(RH*RH + RH*RH);
+
+				var ROFF = -90 * Math.PI / 180;
+				var W = canvas.width;
+				var H = canvas.height;
+				var expectedW = 512;
+				var expectedH = 768;
+				var HW = W / 2.0;
+				var HH = H / 2.0;
+				var WSU = 0.0;
+				var HSV = 0.0;
+				var texture_size = 1024;
+				var WS = texture_size * W / expectedW;
+				var HS = texture_size * H / expectedH;
+
+				var stack = 1;
+				var seg = 20;
+				var sperimeter = 0.0;
+				var rad = 0.0;
+				var rot = 0.0;
+				var back = 0.0;
+
+				var itl = 0;
+				var itr = 0;
+				var ibl = 0;
+				var ibr = 0;
+
+				var center = {x: HW, y: HH};
+
+				var vertices = [];
+				var indices = [];
+
+				function constructByTime(time, angle, radius) {
+					diff = -Math.abs(angle) - tbang;
+					lll = Math.abs( Math.cos(diff) * tblen );
+					offsetx = lll / 2 - (lll * time) - radius;
+
+					construct(offsetx, angle, radius);
+				}
+				
+				function construct(offset, angle, radius) {
+					sperimeter = (Math.PI * radius) / (seg-1);
+					rad = Math.PI / (seg - 1);
+					rot = 180 + angle * 180 / Math.PI;
+					stack = 1;
+					vts = [];
+					tcs = [];
+
+					var i = 0;
+					var j = 0;
+
+					vertices = [];
+					
+					for(j = 0; j < 2; j++) {
+						vertices.push(
+							-hypotenuse,
+							j * (hypotenuse*2) - hypotenuse,
+							0,
+
+							-hypotenuse/WS,
+							j * (hypotenuse/WS*2) - hypotenuse/WS
+						);
+
+						for(i = 0; i < seg; i++) {
+							vertices.push(
+								offset + Math.cos(rad * i + ROFF) * radius,
+								j * (hypotenuse*2) - hypotenuse,
+								radius+Math.sin(rad * i + ROFF) * radius,
+
+								(offset + sperimeter * i)/WS,
+								j * (hypotenuse/WS*2) - hypotenuse/WS
+							);
+						}
+
+						backside = -(hypotenuse * 2 - (HW + offset + hypotenuse-HW + Math.PI * radius));
+						if (backside < 0) {
+							vertices.push(
+								offsetx + backside,
+								j * (hypotenuse*2) - hypotenuse,
+								radius+radius,
+
+								hypotenuse/WS,
+								j * (hypotenuse/WS*2) - hypotenuse/WS
+							);
+						} else {
+							vertices.push(
+								hypotenuse,
+								j * (hypotenuse*2) - hypotenuse,
+								0,
+
+								hypotenuse/WS,
+								j * (hypotenuse/WS*2) - hypotenuse/WS
+							);
+						}
+					}
+					var www = vertices.length / 5 / 2; // columns per row
+
+					indices = [];
+					for (i = 0; i < www-1; i++) {
+						itl = i;
+						itr = i + 1;
+						ibl = i + www;
+						ibr = i + www + 1;
+
+						index = i * 6;
+						indices.push(
+							itl,
+							itr,
+							ibl,
+							itr,
+							ibr,
+							ibl
+						);
+					}
+				}
+
+				var tl = {x: 0.0, y:0.0};
+				var tr = {x: 0.0, y:0.0};
+				var bl = {x: 0.0, y:0.0};
+				var br = {x: 0.0, y:0.0};
+
+				var r = 128 / texture_size / 2;
+				var rr = 0.0;
+				var rrr = 0.0;
+
+				function shadow(time, angle, radius) {
+					tl.x = time;
+					tl.y = -hypotenuse;
+					
+					tr.x = hypotenuse;
+					tr.y = -hypotenuse;
+					
+					bl.x = time;
+					bl.y = hypotenuse;
+					
+					br.x = hypotenuse;
+					br.y = hypotenuse;
+
+					vts = [];
+					tcs = [];
+
+					rr = radius / RADIUS_RANGE;
+					rrr = r * rr;
+
+					vertices.push(
+						tl.x, tl.y, 0.1,
+						rrr,0,
+
+						tr.x, tr.y, 0.1,
+						1,0,
+
+						bl.x, bl.y, 0.1,
+						rrr,1,
+
+						tr.x, tr.y, 0.1,
+						1,0,
+
+						br.x, br.y, 0.1,
+						1,1,
+
+						bl.x, bl.y, 0.1,
+						rrr,1
+					);
+					
+					indices.push(0, 1, 2, 3, 4, 5);
+				}
+
+				var dragging = false;
+				var evtTarget = window;
+				var useCapture = true;
+
+				var _start = {x: 0.0, y:0.0};
+				var _move = {x: 0.0, y:0.0};
+				var _ostart = {x: 0.0, y:0.0};
+				var _omove = {x:0.0, y:0.0};
+				var curlInfo = {time: 0.0, angle: 0.0, radius: 0.0};
+				window.s_mousedown = function( e ) {
+					e.preventDefault();
+					if( !e ) { e = window.event; }
+					if(!dragging) {
+						dragging = true;
+						
+if(usePerspective) {
+	var p  = Utils.convert2to3(W, e.pageY, curlInfo.radius*2+offsetz, _camera);
+						_start.x = p[0];
+						_start.y = p[1];
+} else {
+						_start.x = HW;//e.pageX - center.x;
+						_start.y = -(e.pageY - center.y);
+}
+						_ostart.x = HW;//e.pageX - center.x;
+						_ostart.y = -(e.pageY - center.y);
+					}
+				};
+				evtTarget.addEventListener( "mousedown", window.s_mousedown, useCapture );
+				window.s_mousemove = function( e ) {
+					e.preventDefault();
+					if( !e ) { e = window.event; }
+					if(dragging) {
+
+if(usePerspective) {
+	var p  = Utils.convert2to3(e.pageX, e.pageY, curlInfo.radius*2+offsetz, _camera);
+						_move.x = p[0];
+						_move.y = p[1];
+} else {
+						_move.x = e.pageX - center.x;
+						_move.y = -(e.pageY - center.y);
+}
+						_omove.x = e.pageX - center.x;
+						_omove.y = -(e.pageY - center.y);
+
+						createFold(curlInfo);
+						constructByTime(curlInfo.time, curlInfo.angle, curlInfo.radius);
+					}
+				};
+				evtTarget.addEventListener( "mousemove", window.s_mousemove, useCapture );
+				window.s_mouseup = function( e ) {
+					e.preventDefault();
+					if(dragging) {
+						dragging = false;
+						curlInfo.radius = 0.000001;
+					}
+				};
+				evtTarget.addEventListener( "mouseup", window.s_mouseup, useCapture );
+
+				var PI = Math.PI; // 3.141592653589793
+				var D2R = PI / 180.0;
+				var RADIUS_RANGE = 100.1;
+				var FAR = 2000.0;
+				var NEAR = 1.0;
+				var FOV = 45.0 * D2R;
+				
+				var gtl = {x: -HW, y: -HH};
+				var gtr = {x:  HW, y: -HH};
+				var gbl = {x: -HW, y:  HH};
+				var gbr = {x:  HW, y:  HH};
+
+				var tbvx = gbr.x - gtl.x;
+				var tbvy = gbr.y - gtl.y;
+
+				var tblen = Math.sqrt(tbvx * tbvx + tbvy * tbvy);
+				var tbang = Math.atan2(tbvy, tbvx);
+				
+				var o = {x: 0.0, y:0.0};
+				var oa = 0.0;
+				var ol = 0;
+				var v = {x: 0.0, y:0.0};
+				var va = 0.0;
+				var vl = 0.0;
+				var da = 0.0;
+				var bx = 0.0;
+				var by = 0.0;
+				var brv = {x: 0.0, y:0.0};
+				var bra = 0.0;
+				var brl = 0.0;
+				var r_v = {x: 0.0, y:0.0};
+				var r_va = 0.0;
+				var r_vl = 0.0;
+				var rd = 0.0;
+				var pir = 0.0;
+				var oo = 0.0;
+				var po = 0.0;
+				var rot = 0.0;
+				var radius = 0.0;
+				var offsetx = 0.0;
+				var diff = 0.0;
+				var lll = 0.0;
+				var difff = 0.0;
+				var bry = 0.0;
+				
+				constructByTime(-0.1, 0, 0.000001);
+				
+				var ov = {x: 0.0, y:0.0};
+				var ova = 0.0;
+				var ovl = 0.0;
+				var ord = 0.0;
+
+				function createFold(info) {
+					// o
+					o.x = _start.x - 0;
+					o.y = _start.y - 0;
+					oa = Math.atan2(o.y, o.x);
+					ol = Math.sqrt(o.x*o.x + o.y*o.y);
+					
+					// v
+					v.x = _move.x - _start.x;
+					v.y = _move.y - _start.y;
+					va = Math.atan2(v.y, v.x);
+					vl = Math.sqrt(v.x*v.x + v.y*v.y);
+					da = oa - va;
+					
+					// b
+					bx = (va < 0)?_start.x - gbl.x:_start.x - gtl.x;
+					by = (va < 0)?_start.y - gbl.y:_start.y - gtl.y;
+					brv.x = bx;
+					brv.y = by;
+					bra = Math.atan2(brv.y, brv.x);
+					brl = Math.sqrt(brv.x*brv.x + brv.y*brv.y);
+					
+					// radius
+					rd = vl / HW * RADIUS_RANGE;
+					if (rd <= 0.0) rd = 0.1;
+					if (rd > RADIUS_RANGE) rd = RADIUS_RANGE;
+					radius = rd;
+					if (radius > RADIUS_RANGE) radius = RADIUS_RANGE;
+
+					// oo
+					pir = Math.PI * rd;
+					oo = vl + ol * Math.cos(da);
+					po = (oo - ol*Math.cos(da) - pir) / 2;
+					oo = oo - po;
+
+					// offsetx
+					offsetx = -oo;
+
+//*					
+					diff = -Math.abs(va) - tbang;
+					lll = Math.abs( Math.cos(diff) * tblen );
+
+					difff = bra - va;
+					bry = Math.abs( Math.cos(difff) * brl );
+					
+					if ((lll - (offsetx + lll / 2 + radius)) > bry)
+						offsetx = lll - bry - radius - lll / 2;
+//*/
+
+/////
+/*
+// ov 
+ov.x = _omove.x - _ostart.x;
+ov.y = _omove.y - _ostart.y;
+ova = Math.atan2(ov.y, ov.x);
+ovl = Math.sqrt(ov.x*ov.x + ov.y*ov.y);
+
+// oradius
+ord = ovl / HW * RADIUS_RANGE;
+if (ord <= 0.0) ord = 0.1;
+if (ord > RADIUS_RANGE) ord = RADIUS_RANGE;
+oradius = ord;
+if (oradius > RADIUS_RANGE) oradius = RADIUS_RANGE;
+
+diff = -Math.abs(ova) - tbang;
+lll = Math.abs( Math.cos(diff) * tblen );
+
+difff = bra - ova;
+bry = Math.abs( Math.cos(difff) * brl );
+
+if ((lll - (offsetx + lll / 2 + oradius)) > bry)
+offsetx = lll - bry - oradius - lll / 2;
+//*/
+/////
+
+
+					// time
+					time = (lll / 2 - radius - offsetx) / lll;
+					
+					info.time = time;
+					info.radius = radius;
+					info.angle = va;
+				}
+
+				// experimenting
+				var cube_vertices = [-1.0,-1.0,1.0,1.0,-1.0,1.0,1.0,1.0,1.0,-1.0,1.0,1.0,-1.0,-1.0,-1.0,-1.0,1.0,-1.0,1.0,1.0,-1.0,1.0,-1.0,-1.0,-1.0,1.0,-1.0,-1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,-1.0,-1.0,-1.0,-1.0,1.0, -1.0,-1.0,1.0,-1.0,1.0,-1.0,-1.0,1.0,1.0,-1.0,-1.0,1.0,1.0,-1.0,1.0,1.0,1.0,1.0,-1.0,1.0,-1.0,-1.0,-1.0,-1.0,-1.0,1.0,-1.0,1.0,1.0,-1.0,1.0,-1.0,];
+				var cube_indices = [0,1,2,0,2,3,4,5,6,4,6,7,8,9,10,8,10,11,12,13,14,12,14,15,16,17,18,16,18,19,20,21,22,20,22,23];
+
+				var img = new Image();
+var point_vs = "attribute vec2 aV2Position;\n\
+uniform float uF1PointSize;\n\
+uniform mat4 uM4Projection;\n\
+void main(void) {\n\
+gl_PointSize = uF1PointSize;\n\
+gl_Position = uM4Projection * vec4(aV2Position, 1.0, 1.0);\n\
+}";
+var point_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+uniform vec4 uV4Color;\n\
+void main(void) {\n\
+gl_FragColor = uV4Color;\n\
+}";
+var colorfill_vs = "attribute vec3 aV3Position;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+void main(void) {\n\
+gl_Position = uM4Projection * uM4CameraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}";
+var colorfill_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+uniform vec4 uV4Color;\n\
+void main(void) {\n\
+gl_FragColor = uV4Color;\n\
+}";
+var texturefill_vs = "attribute vec3 aV3Position;\n\
+attribute vec2 aV2Texcoord;\n\
+uniform mat4 uM4Projection;\n\
+uniform mat4 uM4CameraTransform;\n\
+uniform mat4 uM4Transform;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+	vV2Texcoord = aV2Texcoord;\n\
+	gl_Position = uM4Projection * uM4CameraTransform * uM4Transform * vec4(aV3Position, 1.0);\n\
+}";
+var texturefill_fs = "#ifdef GL_ES\n\
+precision highp float;\n\
+#endif\n\
+\n\
+uniform sampler2D uS2Texture;\n\
+uniform mat2 uM2TextureTransform;\n\
+varying vec2 vV2Texcoord;\n\
+\n\
+void main(void) {\n\
+gl_FragColor = texture2D(uS2Texture, vV2Texcoord * uM2TextureTransform + 0.5);\n\
+}";
+
+				var _shader = new Shader(_gl, texturefill_vs, texturefill_fs);
+				var _cshader = new Shader(_gl, colorfill_vs, colorfill_fs);
+				var _pshader = new Shader(_gl, point_vs, point_fs);
+				var _camera = new Camera();
+				_camera.viewport(0,0,canvas.width, canvas.height);
+				if(usePerspective) {
+					_camera.perspective( 60/180*Math.PI, 1, 100000 );
+					_camera.lookAt([0,0,500, 1], [0,0,0,1]);
+				} else	
+					_camera.orthogonal(-canvas.width/2, canvas.width/2, -canvas.height/2, canvas.height/2, -1000, 1000);
+				
+
+				var _rotation = mat4.create();
+				var _texrot = mat2.create();
+				_gl.clearColor(0.9, 0.9, 0.9, 1.0);
+				_gl.enable (_gl.BLEND);
+				_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA);
+				//_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE);
+				//_gl.enable(_gl.CULL_FACE);
+				//_gl.alphaFunc(_gl.GREATER, 0.5);
+				//_gl.enable(_gl.ALPHA_TEST);
+				//_gl.enable(_gl.DEPTH_TEST);
+				//_gl.depthFunc(_gl.LESS);
+
+				var count = 0;
+
+				
+				
+				function initPlay() {
+					stats.begin();
+
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+
+					
+					mat4.identity(_rotation);
+					mat4.rotate(_rotation, _rotation, curlInfo.angle+Math.PI, [0,0,1]);
+
+// magic
+// given z, find the plane that will fit the camera view (frustum plane?)
+console.log("curlInfo.radius = "+curlInfo.radius);
+var p  = Utils.convert2to3(_move.x+center.x, -_move.y+center.y, curlInfo.radius*2+offsetz, _camera);
+var p2 = Utils.convert2to3(_gl.canvas.width, _gl.canvas.height, offsetz, _camera);
+
+var w = p2[0] - p[0];
+var h = p2[1] - p[1];
+
+					mat4.translate(_rotation, _rotation, [0,0, offsetz]);
+
+					mat2.identity(_texrot);
+					mat2.rotate(_texrot, _texrot, curlInfo.angle+Math.PI, [0,0,1]);
+
+					_shader.bind();
+
+						// share
+						_shader.updateUniform("uM4Projection", _camera.projection);
+						_shader.updateUniform("uM4CameraTransform", _camera.transform);
+						_shader.updateUniform("uM4Transform", _rotation);
+						_shader.updateUniform("uS2Texture", images['page']);
+						_shader.updateUniform("uM2TextureTransform", _texrot);
+
+						_shader.updateAttribute("aV3Position", vertices, 5, 0);
+						_shader.updateAttribute("aV2Texcoord", vertices, 5, 3);
+
+						_shader.uploadAttributes();
+
+						
+						_gl.cullFace( _gl.BACK );
+						_shader.drawElement(indices, 'triangles');
+
+						_gl.cullFace( _gl.FRONT );
+						_shader.drawElement(indices, 'triangles');
+
+					_shader.unbind();
+
+if( true ) { // debug
+					_cshader.bind();
+
+						// share
+						_cshader.updateUniform("uM4Projection", _camera.projection);
+						_cshader.updateUniform("uM4CameraTransform", _camera.transform);
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+						
+						_cshader.updateUniform("uV4Color", [1.0, 0.0, 0.0, 1.0]);
+
+						_cshader.updateAttribute("aV3Position", vertices, 5, 0);
+
+						_cshader.uploadAttributes();
+
+						//_cshader.drawArray(vertices.length / 5, 'linestrip');
+						_cshader.drawElement(indices, "linestrip");
+
+						_cshader.updateAttribute("aV3Position", cube_vertices);
+						_cshader.uploadAttributes();
+
+						
+
+						mat4.identity(_rotation);
+
+						mat4.translate(_rotation, _rotation, [p[0], p[1], p[2]]);
+						mat4.scale(_rotation, _rotation, [30,30,30]);
+
+						mat4.rotate(_rotation, _rotation, count/180, [1,0,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,1,0]);
+						mat4.rotate(_rotation, _rotation, count/180, [0,0,1]);
+
+						_cshader.updateUniform("uM4Transform", _rotation);
+
+						//_gl.cullFace( _gl.FRONT );
+						//_cshader.drawElement(cube_indices, "triangles");
+
+						_gl.cullFace( _gl.BACK );
+						_cshader.drawElement(cube_indices, "triangles");
+
+					_cshader.unbind();
+}
+
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+
+				window.addEventListener('keydown', function(e) {
+					event = event || window.event;
+				    var keycode = event.charCode || event.keyCode;
+
+				    if(keycode === 80){
+				    	// press p to switch between orthogonal and perspective projection
+				        usePerspective = !usePerspective;
+
+				        if(usePerspective) {
+							_camera.perspective( 60/180*Math.PI, 1, 100000 );
+							_camera.lookAt([0,0,500, 1], [0,0,0,1]);
+						} else	
+							_camera.orthogonal(-canvas.width/2, canvas.width/2, -canvas.height/2, canvas.height/2, -1000, 1000);
+				    }
+				});
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>

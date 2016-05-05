@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de" lang="de">
+<!--
+/*
+*
+* Mirror mirror on the wall
+*
+******************************************/
+-->
+	<head>
+		<script type="text/javascript" src="../lib/gl-matrix.js"></script>
+		<script type="text/javascript" src="../lib/webgl-utils.js"></script>
+		<script type="text/javascript" src="../lib/Stats.js"></script>
+		<script type="text/javascript" src="../lib/poly2tri.js"></script>
+		<script type="text/javascript" src="../lib/natural.js"></script>
+		<script type="text/javascript" src="../lib/saveNatural.js"></script>
+		<script type="text/javascript">
+		window.requestAnimFrame =
+		window.requestAnimationFrame       ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function(callback) {
+		    window.setTimeout(callback, 1000 / 60);
+		};
+		var canvas = null;
+		var _gl = null;
+		var stats = null;
+		window.onload = function(e) {
+			initStats();
+			initCanvas();
+			initGL();
+			initFun();
+		};
+		function initStats() {
+			stats = new Stats();
+			stats.setMode( 1 );
+			document.body.appendChild( stats.domElement );
+			stats.domElement.style.cssText = "position: fixed; top: 0px; left: 0px;";
+		}
+		var usePerspective = true;
+		var offsetz = -165;
+		function initCanvas() {
+			canvas = document.createElement('canvas');
+
+			canvas.width = 512;
+			canvas.height = 512;
+			document.body.appendChild(canvas);
+		}
+		function initGL() {
+			try {
+		        _gl = canvas.getContext("experimental-webgl");
+		        _gl.canvas = canvas;
+		    } catch (e) {
+		    }
+		    if (!_gl) {
+		        alert("Oops! No webgl? Buy a MacbookPro!");
+		    }
+		}
+		function initFun() {
+			if(_gl) {
+				var loads = [
+					['shadow', 'shadow512.png'],
+					['A', 'Ace-of-Heart-Big.png'],
+					['page', 'page-e1.png'],
+					['test', 'texture.png'],
+					['Box', 'Box.png']
+				];
+				var images = {};
+				function loadImages(func) {
+					if(loads.length > 0) {
+						var load = loads.shift();
+						var img = new Image();
+						img.onload = function(e) {
+							var imgtex = new ImageTexture(_gl);
+							images[load[0]] = imgtex;
+							imgtex.setValue(img);
+							loadImages(func);
+						};
+						img.src = "images/"+load[1];
+					} else {
+						func();
+					}
+				}
+				loadImages(function() {
+					initPlay();
+				});
+
+				// experimenting
+				var vpack = VFactory.genPlaneCenter(0,0,0,4,4);
+				var vcube = VFactory.genCubeCenter(0,0,0,3,3,3);
+				var vcubex = VFactory.genCubeCompleteCenter(0,0,0,3,3,3);
+				//var vpack = VFactory.genCube(0,0,0,3,3,3);
+
+				var _shader = new Shader(_gl, Utils.ShaderScript.Texture3d);
+				var _cshader = new Shader(_gl, Utils.ShaderScript.Color3d);
+				var _pshader = new Shader(_gl,  Utils.ShaderScript.Point3d);
+				var _camera = new Camera();
+
+
+				_camera.viewport(0,0,canvas.width, canvas.height);
+				_camera.perspective( 60/180*Math.PI, 1, 100000 );
+				_camera.lookAt([0,0,15, 1], [0,0,0,1]);
+				
+				new CameraControl(_camera, [0, 0, 15], [0, 0, 0]);
+
+				_gl.clearColor(0.9, 0.9, 0.9, 1.0);
+				//_gl.enable (_gl.BLEND);
+				//_gl.blendFunc(_gl.SRC_ALPHA, _gl.ONE_MINUS_SRC_ALPHA);
+				_gl.enable(_gl.DEPTH_TEST);
+				//_gl.depthFunc(_gl.LESS);
+
+				//_gl.alphaFunc(_gl.GREATER, 0.99);
+				_gl.enable(_gl.CULL_FACE);
+				_gl.cullFace( _gl.BACK );
+
+				var _rotation = mat4.create();
+
+				var count = 0;
+
+				var _rotation = mat4.create();
+
+
+				var useShader = _shader;
+				
+				console.log(useShader.explain());
+
+				function initPlay() {
+					stats.begin();
+
+					_gl.viewport(0, 0, _gl.canvas.width, _gl.canvas.height);
+					_gl.clear(_gl.COLOR_BUFFER_BIT | _gl.DEPTH_BUFFER_BIT);
+
+					mat4.identity(_rotation);
+
+					useShader.bind();
+
+						// share
+						useShader.updateUniform("uM4Projection", _camera.projection);
+						useShader.updateUniform("uM4CameraTransform", _camera.transform);
+
+						useShader.updateAttribute("aV3Position", vcubex.vertices);
+						useShader.uploadAttributes();
+
+						useShader.updateAttribute("aV2Texcoord", vcubex.texcoords);
+						useShader.updateUniform("uS2Texture", images['Box']);
+						useShader.updateUniform("uM4Transform", _rotation);
+						//useShader.updateUniform("uV4Color", [1.0, 0.0, 0.0, 1.0]);
+						useShader.drawElement(vcubex.indices, 'triangles');
+
+						mat4.translate(_rotation, _rotation, [-5,0,0]);
+						useShader.updateUniform("uM4Transform", _rotation);
+
+						useShader.drawElement(vcubex.indices, 'triangles');
+
+						mat4.translate(_rotation, _rotation, [5,-5,0]);
+						useShader.updateUniform("uM4Transform", _rotation);
+
+						useShader.drawElement(vcubex.indices, 'triangles');
+
+					useShader.unbind();
+
+					stats.end();
+
+					count++;
+					requestAnimFrame(initPlay);
+					//setTimeout(initPlay, 8);
+				}
+			}
+		}
+		</script>
+		<style type="text/css">
+			html, body, * { padding: 0; margin: 0; overflow: hidden; }
+		</style>
+	</head>
+	<body></body>
+</html>
