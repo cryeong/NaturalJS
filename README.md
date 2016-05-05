@@ -1,7 +1,9 @@
 # NaturalJS
 NaturalJS is a mini WebGL 3D engine.
 
-#Screenshots
+Click [here](https://dl.dropboxusercontent.com/u/56320860/demo.html) for demo.
+
+# Screenshots
 
 ![alt tag](https://raw.githubusercontent.com/cryeong/NaturalJS/master/screenshots/screenshot0.png)
 
